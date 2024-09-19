@@ -47,7 +47,7 @@ class KANLayer_cus(nn.Module):
                  grid_eps=0.02, grid_range=[-1, 1], 
                  sp_trainable=True, sb_trainable=True, 
                  save_plot_data = True, device='cpu', sparse_init=False,
-                 return_y = False, neuron_fun=None):
+                 return_y = False, neuron_fun=None, use_base =True):
         ''''
         initialize a KANLayer
         
@@ -112,9 +112,12 @@ class KANLayer_cus(nn.Module):
             self.mask = torch.nn.Parameter(sparse_mask(in_dim, out_dim)).requires_grad_(False)
         else:
             self.mask = torch.nn.Parameter(torch.ones(in_dim, out_dim)).requires_grad_(False)
-        
-        self.scale_base = torch.nn.Parameter(scale_base_mu * 1 / np.sqrt(in_dim) + \
-                         scale_base_sigma * (torch.rand(in_dim, out_dim)*2-1) * 1/np.sqrt(in_dim)).requires_grad_(sb_trainable)
+
+        self.use_base =  use_base
+        if use_base == True:
+            self.scale_base = torch.nn.Parameter(scale_base_mu * 1 / np.sqrt(in_dim) + \
+                            scale_base_sigma * (torch.rand(in_dim, out_dim)*2-1) * 1/np.sqrt(in_dim)).requires_grad_(sb_trainable)
+
         self.scale_sp = torch.nn.Parameter(torch.ones(in_dim, out_dim) * scale_sp * self.mask).requires_grad_(sp_trainable)  # make scale trainable
         self.base_fun = base_fun
 
@@ -160,12 +163,15 @@ class KANLayer_cus(nn.Module):
         batch = x.shape[0]
         preacts = x[:,None,:].clone().expand(batch, self.out_dim, self.in_dim)
             
-        base = self.base_fun(x) # (batch, in_dim)
         y = coef2curve(x_eval=x, grid=self.grid, coef=self.coef, k=self.k)
-        
         postspline = y.clone().permute(0,2,1)
-            
-        y = self.scale_base[None,:,:] * base[:,:,None] + self.scale_sp[None,:,:] * y
+        
+        if self.use_base:
+            base = self.base_fun(x) # (batch, in_dim)
+            y = self.scale_base[None,:,:] * base[:,:,None] + self.scale_sp[None,:,:] * y
+        else:
+            y = self.scale_sp[None,:,:] * y
+
         y = self.mask[None,:,:] * y
         
         postacts = y.clone().permute(0,2,1)

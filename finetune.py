@@ -93,8 +93,8 @@ def main():
                         help='weight decay (default: 0)')
     parser.add_argument('--num_layer', type=int, default=2,
                         help='number of GNN message passing layers (default: 5).')
-    parser.add_argument('--emb_dim', type=int, default=32,
-                        help='embedding dimensions (default: 32)')
+    parser.add_argument('--emb_dim', type=int, default=12,
+                        help='embedding dimensions (default: 12)')
     parser.add_argument('--dropout_ratio', type=float, default=0.1,
                         help='dropout ratio (default: 0.1)')
     parser.add_argument('--graph_pooling', type=str, default="mean",
@@ -111,14 +111,15 @@ def main():
     parser.add_argument('--eval_train', type=int, default=1, help='evaluating training or not')
     parser.add_argument('--num_workers', type=int, default=32, help='number of workers for dataset loading')
     parser.add_argument('--kan_mlp', type = str, default='mlp', help="mlp or kan")
+    parser.add_argument('--kan_mp', type = str, default='none', help="kan or none")
     parser.add_argument('--grid', type = int, default = 5, help="bspline grid")
-    parser.add_argument('--k', type = int, default = 3, help="bspline order")
+    parser.add_argument('--k', type = int, default = 1, help="bspline order")
     parser.add_argument('--neuron_fun', type = str, default = 'none', help="kan's neuron_fun, in mean or sum")
 
     args = parser.parse_args()
 
     # Initialize wandb
-    wandb.init(project="ICLR25", config=args)
+    wandb.init(project="ICLR25_final", config=args)
     config = wandb.config
 
     torch.manual_seed(args.runseed)
@@ -187,7 +188,7 @@ def main():
     model = GNN_graphpred(args.num_layer, args.emb_dim, num_tasks,
                            JK=args.JK, drop_ratio=args.dropout_ratio, 
                            graph_pooling=args.graph_pooling, gnn_type=args.gnn_type,
-                            kan_mlp = args.kan_mlp,  grid = args.grid, k = args.k, neuron_fun= args.neuron_fun)
+                            kan_mlp = args.kan_mlp, kan_mp= args.kan_mp, grid = args.grid, k = args.k, neuron_fun= args.neuron_fun)
     if not args.input_model_file == "":
         print(args.input_model_file)
         model.from_pretrained(args.input_model_file, device)

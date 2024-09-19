@@ -25,7 +25,7 @@ class GINConv(MessagePassing):
 
     See https://arxiv.org/abs/1810.00826
     """
-    def __init__(self, emb_dim, aggr="add", kan_mlp = False, grid =None ,k = None, neuron_fun =None ):
+    def __init__(self, emb_dim, aggr="add", kan_mlp = False, kan_mp = False, grid =None ,k = None, neuron_fun =None ):
         super(GINConv, self).__init__()
         
         #node updateing stage
@@ -53,9 +53,11 @@ class GINConv(MessagePassing):
         self.aggr = aggr
 
         #add mp layer
-        # self.message_passing_kan = KANLayer_cus(in_dim = emb_dim, out_dim = emb_dim, num = grid, k = k,
-        #                                         return_y= True, neuron_fun = neuron_fun,
-        #                                         sb_trainable=False,scale_base_mu=0, scale_base_sigma=0)
+        self.kan_mp = kan_mp
+        if kan_mp == "kan":
+            print("using KAN message passing")
+            self.message_passing_kan = KANLayer_cus(in_dim = emb_dim, out_dim = emb_dim, num = grid, k = k,
+                                                    return_y= True, neuron_fun = "mean", use_base= False)
 
     def forward(self, x, edge_index, edge_attr):
         #add self loops in the edge space
@@ -79,9 +81,11 @@ class GINConv(MessagePassing):
         # Default message is x_j + edge_attr
         msg = x_j + edge_attr
         #add mp_kan
-        #kan_msg = self.message_passing_kan(msg)
-        #kan_msg
-        return msg
+        if self.kan_mp == "kan":
+            kan_msg = self.message_passing_kan(msg)
+            return msg + kan_msg
+        else:
+            return msg
 
     def update(self, aggr_out):
         return self.mlp(aggr_out)
@@ -325,7 +329,7 @@ class GNN(torch.nn.Module):
 
     """
     def __init__(self, num_layer, emb_dim, JK = "last", drop_ratio=0, gnn_type = "gin",
-                 kan_mlp = False, grid = None, k = None, neuron_fun =None):
+                 kan_mlp = False, kan_mp = False, grid = None, k = None, neuron_fun =None):
         super(GNN, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
@@ -345,7 +349,7 @@ class GNN(torch.nn.Module):
         self.gnns = torch.nn.ModuleList()
         for layer in range(num_layer):
             if gnn_type == "gin":
-                self.gnns.append(GINConv(emb_dim, aggr="add", kan_mlp = kan_mlp, grid = grid, k = k, neuron_fun = neuron_fun ))
+                self.gnns.append(GINConv(emb_dim, aggr="add", kan_mlp = kan_mlp, kan_mp = kan_mp, grid = grid, k = k, neuron_fun = neuron_fun ))
             elif gnn_type == "gcn":
                 self.gnns.append(GCNConv(emb_dim, emb_dim, kan_mlp = kan_mlp))
             elif gnn_type == "gat":
@@ -449,7 +453,7 @@ class GNN_graphpred(torch.nn.Module):
     JK-net: https://arxiv.org/abs/1806.03536
     """
     def __init__(self, num_layer, emb_dim, num_tasks, JK = "last", drop_ratio = 0, graph_pooling = "mean", gnn_type = "gin",
-                 kan_mlp = None, grid = None, k = None, neuron_fun = None):
+                 kan_mlp = None, kan_mp = None, grid = None, k = None, neuron_fun = None):
         super(GNN_graphpred, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
@@ -461,7 +465,7 @@ class GNN_graphpred(torch.nn.Module):
             raise ValueError("Number of GNN layers must be greater than 1.")
 
         self.gnn = GNN(num_layer, emb_dim, JK, drop_ratio, gnn_type=gnn_type, 
-                       kan_mlp = kan_mlp, grid = grid, k = k, neuron_fun= neuron_fun)
+                       kan_mlp = kan_mlp, kan_mp = kan_mp, grid = grid, k = k, neuron_fun= neuron_fun)
 
         #Different kind of graph pooling
         if graph_pooling == "sum":
