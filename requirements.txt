@@ -1,0 +1,12 @@
+torch==2.0.1
+numpy
+matplotlib
+tqdm
+pyyaml
+pandas
+seaborn
+scikit-learn
+wandb
+rdkit                    
+tensorboardx  
+pykan
