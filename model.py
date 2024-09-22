@@ -1,4 +1,5 @@
 import torch
+from torch_geometric.utils import to_dense_batch
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree, softmax
 from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool, GlobalAttention, Set2Set
@@ -7,6 +8,16 @@ from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
 from kan import *
 from layer.KANLayer_cus import KANLayer_cus
+from layer.bsrbf_kan import BSRBF_KANLayer
+from layer.cheby_kan import ChebyKANLayer
+from layer.efficient_kan import EfficientKANLinear
+from layer.fast_kan import FastKANLayer
+from layer.faster_kan import FasterKANLayer
+from layer.fourier_kan import NaiveFourierKANLayer
+from layer.jacobi_kan import JacobiKANLayer
+from layer.laplace_kan import NaiveLaplaceKANLayer
+from layer.legendre_kan import RecurrentLegendreLayer
+from layer.wavlet_kan import WavletKANLinear
 
 num_atom_type = 120 #including the extra mask tokens
 num_chirality_tag = 3
@@ -25,7 +36,7 @@ class GINConv(MessagePassing):
 
     See https://arxiv.org/abs/1810.00826
     """
-    def __init__(self, emb_dim, aggr="add", kan_mlp = False, kan_mp = False, grid =None ,k = None, neuron_fun =None ):
+    def __init__(self, emb_dim, aggr="add", kan_mlp = False, kan_mp = False, kan_type = None, grid =None ,k = None, neuron_fun =None ):
         super(GINConv, self).__init__()
         
         #node updateing stage
@@ -34,13 +45,87 @@ class GINConv(MessagePassing):
             print("Using MLP in updating")
             self.mlp = torch.nn.Sequential(torch.nn.Linear(emb_dim, 2*emb_dim), torch.nn.ReLU(), torch.nn.Linear(2*emb_dim, emb_dim))
         elif kan_mlp == "kan":
-            print(f"Using KAN in updating, grid:{grid}, k:{k}")
-            # self.mlp = KAN(width = [emb_dim, 2*emb_dim, emb_dim], grid = grid, k = k).speed()
-            self.mlp =  torch.nn.Sequential(
-                #normal 
-                KANLayer_cus(in_dim = emb_dim, out_dim = 2*emb_dim, num = grid, k = k, return_y= True, neuron_fun = neuron_fun), 
-                KANLayer_cus(in_dim = 2*emb_dim, out_dim = emb_dim, num = grid, k = k, return_y= True, neuron_fun = neuron_fun),
-            )
+            if kan_type == "ori":
+                print(f"Using KAN in updating, grid:{grid}, k:{k}")
+                # self.mlp = KAN(width = [emb_dim, 2*emb_dim, emb_dim], grid = grid, k = k).speed()
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    KANLayer_cus(in_dim = emb_dim, out_dim = 2*emb_dim, num = grid, k = k, return_y= True, neuron_fun = neuron_fun), 
+                    KANLayer_cus(in_dim = 2*emb_dim, out_dim = emb_dim, num = grid, k = k, return_y= True, neuron_fun = neuron_fun),
+                )
+            elif kan_type == "bsrbf":
+                print(f"Using bsrbf KAN in updating, grid:{grid}, k:{k}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    BSRBF_KANLayer(input_dim = emb_dim, output_dim = 2*emb_dim, grid_size = grid, spline_order = k), 
+                    BSRBF_KANLayer(input_dim = 2*emb_dim, output_dim = emb_dim, grid_size = grid, spline_order = k), 
+                )
+            elif kan_type == "cheby":
+                print(f"Using cheby KAN in updating, degree:{k}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    ChebyKANLayer(input_dim = emb_dim, output_dim = 2*emb_dim, degree = k),
+                    nn.LayerNorm(2*emb_dim), 
+                    ChebyKANLayer(input_dim = 2*emb_dim, output_dim = emb_dim, degree = k), 
+                )
+            elif kan_type == 'eff':
+                print(f"Using efficient KAN in updating, grid:{grid}, k:{k}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    EfficientKANLinear(in_features = emb_dim, out_features = 2*emb_dim, grid_size = grid, spline_order = k), 
+                    EfficientKANLinear(in_features = 2*emb_dim, out_features = emb_dim, grid_size = grid, spline_order = k),
+                )
+            elif kan_type == 'fast':
+                print(f"Using fast KAN in updating, num_grids:{grid}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    FastKANLayer(input_dim = emb_dim, output_dim = 2*emb_dim, num_grids = grid), 
+                    FastKANLayer(input_dim = 2*emb_dim, output_dim = emb_dim, num_grids = grid), 
+                )
+            elif kan_type == 'faster':
+                print(f"Using faster KAN in updating, num_grids:{grid}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    FasterKANLayer(input_dim = emb_dim, output_dim = 2*emb_dim, num_grids = grid), 
+                    FasterKANLayer(input_dim = 2*emb_dim, output_dim = emb_dim, num_grids = grid), 
+                )   
+            elif kan_type == 'fourier':
+                print(f"Using fourier KAN in updating, gridsize:{grid}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    NaiveFourierKANLayer(inputdim = emb_dim, outdim = 2*emb_dim, gridsize = grid), 
+                    NaiveFourierKANLayer(inputdim = 2*emb_dim, outdim = emb_dim, gridsize = grid), 
+                )
+            elif kan_type == 'jacobi':
+                print(f"Using jacobi KAN in updating, degree:{k}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    JacobiKANLayer(input_dim = emb_dim, output_dim = 2*emb_dim, degree = k), 
+                    JacobiKANLayer(input_dim = 2*emb_dim, output_dim = emb_dim, degree = k), 
+                ) 
+            elif kan_type == 'laplace':
+                print(f"Using laplace KAN in updating, initial_gridsize:{grid}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    NaiveLaplaceKANLayer(inputdim = emb_dim, outdim = 2*emb_dim, initial_gridsize = grid), 
+                    NaiveLaplaceKANLayer(inputdim = 2*emb_dim, outdim = emb_dim, initial_gridsize = grid), 
+                )      
+            elif kan_type == 'legendre':
+                print(f"Using legendre KAN in updating, max_degree:{k}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    RecurrentLegendreLayer(input_dim = emb_dim, output_dim = 2*emb_dim, max_degree = k), 
+                    RecurrentLegendreLayer(input_dim = 2*emb_dim, output_dim = emb_dim, max_degree = k), 
+                )     
+            elif kan_type == 'wavelet':
+                print(f"Using wavelet KAN in updating, max_degree:{k}")
+                self.mlp =  torch.nn.Sequential(
+                    #normal 
+                    WavletKANLinear(in_features = emb_dim, out_features = 2*emb_dim), 
+                    WavletKANLinear(in_features = 2*emb_dim, out_features = emb_dim), 
+                )                                                           
+            else:
+                raise ValueError("Wrong kan type")            
         else:
             raise ValueError("Wrong mlp")
           
@@ -238,6 +323,8 @@ class GraphSAGEConv(MessagePassing):
         return F.normalize(aggr_out, p=2, dim=-1)
 
 
+
+
 class GNN_imp_estimator(torch.nn.Module):
     """
 
@@ -329,11 +416,14 @@ class GNN(torch.nn.Module):
 
     """
     def __init__(self, num_layer, emb_dim, JK = "last", drop_ratio=0, gnn_type = "gin",
-                 kan_mlp = False, kan_mp = False, grid = None, k = None, neuron_fun =None):
+                 kan_mlp = False, kan_mp = False, kan_type = None, grid = None, k = None, neuron_fun =None,
+                 use_transformer=False, num_heads=4):
         super(GNN, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
         self.JK = JK
+        self.use_transformer = use_transformer
+        dim_feedforward = 2*emb_dim
 
         if self.num_layer < 2:
             raise ValueError("Number of GNN layers must be greater than 1.")
@@ -349,89 +439,71 @@ class GNN(torch.nn.Module):
         self.gnns = torch.nn.ModuleList()
         for layer in range(num_layer):
             if gnn_type == "gin":
-                self.gnns.append(GINConv(emb_dim, aggr="add", kan_mlp = kan_mlp, kan_mp = kan_mp, grid = grid, k = k, neuron_fun = neuron_fun ))
+                self.gnns.append(GINConv(emb_dim, aggr="add", kan_mlp = kan_mlp, kan_mp = kan_mp, kan_type= kan_type, grid = grid, k = k, neuron_fun = neuron_fun ))
+                if use_transformer:
+                    self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
             elif gnn_type == "gcn":
                 self.gnns.append(GCNConv(emb_dim, emb_dim, kan_mlp = kan_mlp))
+                if use_transformer:
+                    self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
             elif gnn_type == "gat":
                 self.gnns.append(GATConv(emb_dim, kan_mlp = kan_mlp))
+                if use_transformer:
+                    self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
             elif gnn_type == "graphsage":
                 self.gnns.append(GraphSAGEConv(emb_dim, kan_mlp = kan_mlp))
+                if use_transformer:
+                    self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
+
 
         ###List of batchnorms
         self.batch_norms = torch.nn.ModuleList()
         for layer in range(num_layer):
             self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
 
-    #def forward(self, x, edge_index, edge_attr):
-    def forward(self, *argv):
-        if len(argv) == 3:
-            x, edge_index, edge_attr = argv[0], argv[1], argv[2]
-        elif len(argv) == 1:
-            data = argv[0]
-            x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-        else:
-            raise ValueError("unmatched number of arguments.")
 
-        x = self.x_embedding1(x[:,0]) + self.x_embedding2(x[:,1])
+    def forward(self, x, edge_index, edge_attr, batch):
+        # Embed node features
+        x = self.x_embedding1(x[:, 0]) + self.x_embedding2(x[:, 1])
+        h = x
+        h_list = [h]
 
-        h_list = [x]
         for layer in range(self.num_layer):
-            h = self.gnns[layer](h_list[layer], edge_index, edge_attr)
-            h = self.batch_norms[layer](h)
-            #h = F.dropout(F.relu(h), self.drop_ratio, training = self.training)
-            if layer == self.num_layer - 1:
-                #remove relu for the last layer
-                h = F.dropout(h, self.drop_ratio, training = self.training)
+            h = h_list[layer]
+
+            # If the current layer is a Transformer layer
+            if isinstance(self.gnns[layer], nn.TransformerEncoderLayer):
+                # Pad h
+                h_padded, mask = to_dense_batch(h, batch)  # h_padded: [batch_size, max_num_nodes, emb_dim]
+                batch_size, max_num_nodes, emb_dim = h_padded.shape
+                # Reshape for Transformer input: [max_num_nodes, batch_size, emb_dim]
+                h_padded = h_padded.permute(1, 0, 2)
+                # Apply Transformer layer
+                h_padded = self.gnns[layer](h_padded, src_key_padding_mask=~mask)# Invert the mask to indicate padding with True
+                # Reshape back and unpad h
+                h_padded = h_padded.permute(1, 0, 2)
+                h = h_padded[mask].reshape(-1, emb_dim)
             else:
-                h = F.dropout(F.relu(h), self.drop_ratio, training = self.training)
+                # GNN layer: process h with edge_index and edge_attr
+                h = self.gnns[layer](h, edge_index, edge_attr)
+
+            h = self.batch_norms[layer](h)
+            if layer == self.num_layer - 1:
+                h = F.dropout(h, self.drop_ratio, training=self.training)
+            else:
+                h = F.dropout(F.relu(h), self.drop_ratio, training=self.training)
+
             h_list.append(h)
 
-        ### Different implementations of Jk-concat
+        # Combine node representations
         if self.JK == "concat":
-            node_representation = torch.cat(h_list, dim = 1)
+            node_representation = torch.cat(h_list, dim=1)
         elif self.JK == "last":
             node_representation = h_list[-1]
         elif self.JK == "max":
-            h_list = [h.unsqueeze_(0) for h in h_list]
-            node_representation = torch.max(torch.cat(h_list, dim = 0), dim = 0)[0]
+            node_representation = torch.stack(h_list, dim=0).max(dim=0)[0]
         elif self.JK == "sum":
-            h_list = [h.unsqueeze_(0) for h in h_list]
-            node_representation = torch.sum(torch.cat(h_list, dim = 0), dim = 0)[0]
-
-        return node_representation
-
-    def forward_gradc(self, *argv):
-        if len(argv) == 3:
-            x, edge_index, edge_attr = argv[0], argv[1], argv[2]
-        elif len(argv) == 1:
-            data = argv[0]
-            x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-        else:
-            raise ValueError("unmatched number of arguments.")
-
-        h_list = [x]
-        for layer in range(self.num_layer):
-            h = self.gnns[layer](h_list[layer], edge_index, edge_attr)
-            h = self.batch_norms[layer](h)
-            #h = F.dropout(F.relu(h), self.drop_ratio, training = self.training)
-            if layer == self.num_layer - 1:
-                #remove relu for the last layer
-                h = F.dropout(h, self.drop_ratio, training = self.training)
-            else:
-                h = F.dropout(F.relu(h), self.drop_ratio, training = self.training)
-            h_list.append(h)
-
-        ### Different implementations of Jk-concat
-        if self.JK == "concat":
-            node_representation = torch.cat(h_list, dim = 1)
-        elif self.JK == "last":
-            node_representation = h_list[-1]
-        elif self.JK == "max":
-            h_list = [h.unsqueeze_(0) for h in h_list]
-            node_representation = torch.max(torch.cat(h_list, dim = 0), dim = 0)[0]
-        elif self.JK == "sum":
-            h_list = [h.unsqueeze_(0) for h in h_list]
-            node_representation = torch.sum(torch.cat(h_list, dim = 0), dim = 0)[0]
+            node_representation = torch.stack(h_list, dim=0).sum(dim=0)
 
         return node_representation
 
@@ -453,7 +525,7 @@ class GNN_graphpred(torch.nn.Module):
     JK-net: https://arxiv.org/abs/1806.03536
     """
     def __init__(self, num_layer, emb_dim, num_tasks, JK = "last", drop_ratio = 0, graph_pooling = "mean", gnn_type = "gin",
-                 kan_mlp = None, kan_mp = None, grid = None, k = None, neuron_fun = None):
+                 kan_mlp = None, kan_mp = None, kan_type = None, grid = None, k = None, neuron_fun = None, use_transformer = False):
         super(GNN_graphpred, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
@@ -465,7 +537,8 @@ class GNN_graphpred(torch.nn.Module):
             raise ValueError("Number of GNN layers must be greater than 1.")
 
         self.gnn = GNN(num_layer, emb_dim, JK, drop_ratio, gnn_type=gnn_type, 
-                       kan_mlp = kan_mlp, kan_mp = kan_mp, grid = grid, k = k, neuron_fun= neuron_fun)
+                       kan_mlp = kan_mlp, kan_mp = kan_mp, kan_type = kan_type, grid = grid, k = k, neuron_fun= neuron_fun,
+                       use_transformer = use_transformer)
 
         #Different kind of graph pooling
         if graph_pooling == "sum":
@@ -508,13 +581,9 @@ class GNN_graphpred(torch.nn.Module):
             self.graph_pred_linear = torch.nn.Linear(self.mult * self.emb_dim, self.num_tasks)
 
     def from_pretrained(self, model_file, device):
-        # self.gnn.load_state_dict(torch.load(model_file + "_gnn.pth", map_location=lambda storage, loc: storage))
-        # self.gnn.load_state_dict(torch.load("model_gin/contextpred.pth", map_location=lambda storage, loc: storage))
         if not model_file == "":
             self.gnn.load_state_dict(torch.load(model_file, map_location=lambda storage, loc: storage))
             self.gnn.to(device)
-        # self.node_imp_estimator.load_state_dict(torch.load(model_file + "_node_imp_estimator.pth", map_location=lambda storage, loc: storage))
-        # self.node_imp_estimator.to(device)
 
     def forward(self, *argv):
         if len(argv) == 4:
@@ -525,10 +594,7 @@ class GNN_graphpred(torch.nn.Module):
         else:
             raise ValueError("unmatched number of arguments.")
         
-        node_representation = self.gnn(x, edge_index, edge_attr)
-        # node_imp = self.node_imp_estimator(x, edge_index, edge_attr, batch)
-        # node_representation = torch.mul(node_representation, node_imp)
-
+        node_representation = self.gnn(x, edge_index, edge_attr, batch)
 
         return self.graph_pred_linear(self.pool(node_representation, batch))
 

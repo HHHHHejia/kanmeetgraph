@@ -1,37 +1,47 @@
+#!/bin/bash
+
 # 从命令行参数传入变量
 device=$1   # 第一个参数是 GPU 号
 runseed=$2  # 第二个参数是 runseed
-num_layer=$3  # 第三个参数是 num_layer
-dataset="bace"
 type="gin"
 
-# emb_dim 的不同值列表
+# 定义数据集列表
+w
+# num_layer 和 emb_dim 的不同值列表
+num_layers=(2 3 4 5)
 emb_dims=(8 16 32 64)
 
-# 遍历 emb_dim 并顺序执行 mlp 和 kan 两种任务
-for emb_dim in "${emb_dims[@]}"
+# 遍历每个 dataset
+for dataset in "${datasets[@]}"
 do
-    # 运行任务1：mlp
-    echo "Running MLP on GPU $device with num_layer $num_layer and emb_dim $emb_dim"
-    python finetune.py \
-        --runseed $runseed \
-        --dataset $dataset \
-        --device $device \
-        --num_layer $num_layer \
-        --emb_dim $emb_dim \
-        --gnn_type $type \
-        --kan_mlp mlp
+    # 遍历 num_layer 和 emb_dim 并顺序执行 mlp 和 kan 两种任务
+    for num_layer in "${num_layers[@]}"
+    do
+        for emb_dim in "${emb_dims[@]}"
+        do
+            # 运行任务1：mlp
+            echo "Running MLP on GPU $device with dataset $dataset, num_layer $num_layer, emb_dim $emb_dim, and runseed $runseed"
+            python finetune.py \
+                --runseed $runseed \
+                --dataset $dataset \
+                --device $device \
+                --num_layer $num_layer \
+                --emb_dim $emb_dim \
+                --gnn_type $type \
+                --kan_mlp mlp
 
-    # 运行任务2：kan with sum neuron_fun
-    echo "Running KAN on GPU $device with num_layer $num_layer and emb_dim $emb_dim"
-    finetune.py \
-        --runseed $runseed \
-        --dataset $dataset \
-        --device $device \
-        --num_layer $num_layer \
-        --emb_dim $emb_dim \
-        --gnn_type $type \
-        --kan_mlp kan \
-        --kan_mp kan \
-        --neuron_fun sum
+            # 运行任务2：kan with sum neuron_fun
+            echo "Running KAN on GPU $device with dataset $dataset, num_layer $num_layer, emb_dim $emb_dim, and runseed $runseed"
+            python finetune.py \
+                --runseed $runseed \
+                --dataset $dataset \
+                --device $device \
+                --num_layer $num_layer \
+                --emb_dim $emb_dim \
+                --gnn_type $type \
+                --kan_mlp kan \
+                --kan_mp kan \
+                --neuron_fun sum
+        done
+    done
 done
