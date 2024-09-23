@@ -18,7 +18,7 @@ from layer.jacobi_kan import JacobiKANLayer
 from layer.laplace_kan import NaiveLaplaceKANLayer
 from layer.legendre_kan import RecurrentLegendreLayer
 from layer.wavlet_kan import WavletKANLinear
-
+from layer.TransKGNN import KANTransformerEncoderLayer
 num_atom_type = 120 #including the extra mask tokens
 num_chirality_tag = 3
 
@@ -72,8 +72,8 @@ class GINConv(MessagePassing):
                 print(f"Using efficient KAN in updating, grid:{grid}, k:{k}")
                 self.mlp =  torch.nn.Sequential(
                     #normal 
-                    EfficientKANLinear(in_features = emb_dim, out_features = 2*emb_dim, grid_size = grid, spline_order = k), 
-                    EfficientKANLinear(in_features = 2*emb_dim, out_features = emb_dim, grid_size = grid, spline_order = k),
+                    EfficientKANLinear(in_dim = emb_dim, out_dim = 2*emb_dim, num = grid, k = k), 
+                    EfficientKANLinear(in_dim = 2*emb_dim, out_dim = emb_dim, num = grid, k = k),
                 )
             elif kan_type == 'fast':
                 print(f"Using fast KAN in updating, num_grids:{grid}")
@@ -440,20 +440,20 @@ class GNN(torch.nn.Module):
         for layer in range(num_layer):
             if gnn_type == "gin":
                 self.gnns.append(GINConv(emb_dim, aggr="add", kan_mlp = kan_mlp, kan_mp = kan_mp, kan_type= kan_type, grid = grid, k = k, neuron_fun = neuron_fun ))
-                if use_transformer:
+                if use_transformer == "mlp":
                     self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
+                elif use_transformer == "kan":
+                    self.gnns.append(KANTransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
+            
             elif gnn_type == "gcn":
                 self.gnns.append(GCNConv(emb_dim, emb_dim, kan_mlp = kan_mlp))
-                if use_transformer:
-                    self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
+
             elif gnn_type == "gat":
                 self.gnns.append(GATConv(emb_dim, kan_mlp = kan_mlp))
-                if use_transformer:
-                    self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
+
             elif gnn_type == "graphsage":
                 self.gnns.append(GraphSAGEConv(emb_dim, kan_mlp = kan_mlp))
-                if use_transformer:
-                    self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
+
 
 
         ###List of batchnorms
@@ -472,7 +472,7 @@ class GNN(torch.nn.Module):
             h = h_list[layer]
 
             # If the current layer is a Transformer layer
-            if isinstance(self.gnns[layer], nn.TransformerEncoderLayer):
+            if (isinstance(self.gnns[layer], nn.TransformerEncoderLayer) or isinstance(self.gnns[layer], KANTransformerEncoderLayer)) :
                 # Pad h
                 h_padded, mask = to_dense_batch(h, batch)  # h_padded: [batch_size, max_num_nodes, emb_dim]
                 batch_size, max_num_nodes, emb_dim = h_padded.shape

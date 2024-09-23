@@ -47,7 +47,7 @@ class KANLayer_cus(nn.Module):
                  grid_eps=0.02, grid_range=[-1, 1], 
                  sp_trainable=True, sb_trainable=True, 
                  save_plot_data = True, device='cpu', sparse_init=False,
-                 return_y = False, neuron_fun=None, use_base =True):
+                 return_y = True, neuron_fun='sum', use_base =True):
         ''''
         initialize a KANLayer
         

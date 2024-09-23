@@ -8,10 +8,10 @@ import math
 class EfficientKANLinear(torch.nn.Module):
     def __init__(
         self,
-        in_features,
-        out_features,
-        grid_size=5,
-        spline_order=3,
+        in_dim,
+        out_dim,
+        num=5,
+        k=3,
         scale_noise=0.1,
         scale_base=1.0,
         scale_spline=1.0,
@@ -21,28 +21,28 @@ class EfficientKANLinear(torch.nn.Module):
         grid_range=[-1.5, 1.5],
     ):
         super(EfficientKANLinear, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.grid_size = grid_size
-        self.spline_order = spline_order
+        self.in_features = in_dim
+        self.out_features = out_dim
+        self.grid_size = num
+        self.spline_order = k
 
-        h = (grid_range[1] - grid_range[0]) / grid_size # 0.45, 0.5
+        h = (grid_range[1] - grid_range[0]) / num # 0.45, 0.5
         grid = (
             (
-                torch.arange(-spline_order, grid_size + spline_order + 1) * h 
+                torch.arange(-k, num + k + 1) * h 
                 + grid_range[0]
             )
-            .expand(in_features, -1)
+            .expand(in_dim, -1)
             .contiguous()
         )
         self.register_buffer("grid", grid)
-        self.base_weight = torch.nn.Parameter(torch.Tensor(out_features, in_features))
+        self.base_weight = torch.nn.Parameter(torch.Tensor(out_dim, in_dim))
         self.spline_weight = torch.nn.Parameter(
-            torch.Tensor(out_features, in_features, grid_size + spline_order)
+            torch.Tensor(out_dim, in_dim, num + k)
         )
         if enable_standalone_scale_spline:
             self.spline_scaler = torch.nn.Parameter(
-                torch.Tensor(out_features, in_features)
+                torch.Tensor(out_dim, in_dim)
             )
 
         self.scale_noise = scale_noise
@@ -52,6 +52,7 @@ class EfficientKANLinear(torch.nn.Module):
         self.base_activation = base_activation()
         self.grid_eps = grid_eps
         self.reset_parameters()
+        print("using efficient kan, in_dim, out_dim, num, k:", in_dim, out_dim, num, k )
 
     def reset_parameters(self):
         """ 

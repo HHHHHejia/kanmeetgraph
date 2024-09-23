@@ -116,7 +116,7 @@ def main():
     parser.add_argument('--grid', type = int, default = 5, help="bspline grid")
     parser.add_argument('--k', type = int, default = 3, help="bspline order")
     parser.add_argument('--neuron_fun', type = str, default = 'sum', help="kan's neuron_fun, in mean or sum")
-    parser.add_argument('--use_transformer', action='store_true', help="Use transformer")
+    parser.add_argument('--use_transformer', type = str, default = 'mlp' , help="Use transformer: none, mlp or kan")
 
     args = parser.parse_args()
 

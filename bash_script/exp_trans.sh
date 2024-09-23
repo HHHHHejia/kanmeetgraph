@@ -26,7 +26,7 @@ do
             --emb_dim $emb_dim \
             --gnn_type $type \
             --kan_mlp mlp\
-            --use_transformer
+            --use_transformer mlp
 
         # 运行任务2：kan with sum neuron_fun
         echo "Running KAN on GPU $device with dataset $dataset, num_layer $num_layer, emb_dim $emb_dim, and runseed $runseed"
@@ -38,6 +38,6 @@ do
             --emb_dim $emb_dim \
             --gnn_type $type \
             --kan_mlp kan \
-            --use_transformer
+            --use_transformer kan
     done
 done
