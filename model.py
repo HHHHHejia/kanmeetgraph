@@ -425,8 +425,8 @@ class GNN(torch.nn.Module):
         self.use_transformer = use_transformer
         dim_feedforward = 2*emb_dim
 
-        if self.num_layer < 2:
-            raise ValueError("Number of GNN layers must be greater than 1.")
+        # if self.num_layer < 2:
+        #     raise ValueError("Number of GNN layers must be greater than 1.")
 
         self.x_embedding1 = torch.nn.Embedding(num_atom_type, emb_dim)
         self.x_embedding2 = torch.nn.Embedding(num_chirality_tag, emb_dim)
@@ -441,8 +441,10 @@ class GNN(torch.nn.Module):
             if gnn_type == "gin":
                 self.gnns.append(GINConv(emb_dim, aggr="add", kan_mlp = kan_mlp, kan_mp = kan_mp, kan_type= kan_type, grid = grid, k = k, neuron_fun = neuron_fun ))
                 if use_transformer == "mlp":
+                    print("using mlp transformer")
                     self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
                 elif use_transformer == "kan":
+                    print("using kan transformer")
                     self.gnns.append(KANTransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
             
             elif gnn_type == "gcn":
