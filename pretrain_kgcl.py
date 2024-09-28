@@ -1,6 +1,6 @@
 import argparse
 import argparse
-from loader import MoleculeDataset_aug_rgcl
+from loader import MoleculeDataset_aug
 from torch_geometric.loader import DataLoader
 from torch_geometric.nn import global_mean_pool
 import torch
@@ -18,6 +18,7 @@ import gc
 import wandb
 from datetime import datetime
 import pytz
+from copy import deepcopy
 
 
 
@@ -68,21 +69,30 @@ class graphcl(nn.Module):
 
 def train(args, model1, model2, device, dataset, optimizer1, optimizer2):
     dataset.aug = "none"
-    loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=args.num_workers, shuffle=False)
+
+    dataset1 = dataset.shuffle()
+    dataset2 = deepcopy(dataset1)
+    dataset1.aug, dataset1.aug_ratio = args.aug1, args.aug_ratio1
+    dataset2.aug, dataset2.aug_ratio = args.aug2, args.aug_ratio2
+
+    loader1 = DataLoader(dataset1, batch_size=args.batch_size, num_workers = args.num_workers, shuffle=False)
+    loader2 = DataLoader(dataset2, batch_size=args.batch_size, num_workers = args.num_workers, shuffle=False)
 
     model1.train()
     model2.train()
 
     train_loss_accum = 0
 
-    for step, batch in tqdm(enumerate(loader)):
-        batch = batch.to(device)
+    for step, batch in enumerate(tqdm(zip(loader1, loader2), desc="Iteration")):
+        batch1, batch2 = batch
+        batch1 = batch1.to(device)
+        batch2 = batch2.to(device)
 
         optimizer1.zero_grad()
         optimizer2.zero_grad()
 
-        x1 = model1.forward_cl(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
-        x2 = model2.forward_cl(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+        x1 = model1.forward_cl(batch1.x, batch1.edge_index, batch1.edge_attr, batch1.batch)
+        x2 = model2.forward_cl(batch2.x, batch2.edge_index, batch2.edge_attr, batch2.batch)
 
         loss = model1.loss_cl(x1, x2, args.loss_temp, args)
 
@@ -138,7 +148,6 @@ def main():
     parser.add_argument('--kan_mp', type = str, default='none', help="kan or none")
     parser.add_argument('--kan_type1', type = str, default='ori', help="ori, bsrbf")
     parser.add_argument('--kan_type2', type = str, default='eff', help="ori, bsrbf")
-
     parser.add_argument('--grid', type = int, default = 5, help="bspline grid")
     parser.add_argument('--k', type = int, default = 3, help="bspline order")
     parser.add_argument('--neuron_fun', type = str, default = 'sum', help="kan's neuron_fun, in mean or sum")
@@ -150,6 +159,8 @@ def main():
     current_time = datetime.now(pst).strftime('%Y%m%d_%H%M%S')
     parser.add_argument('--save_model_path', type=str, default=f"./models_rgcl/{current_time}/")
     parser.add_argument('--loss_temp', type=float, default=0.1)
+    parser.add_argument('--input_model_file1', type=str, default="", help='filename to read the model (if there is any)')
+    parser.add_argument('--input_model_file2', type=str, default="", help='filename to read the model (if there is any)')
 
     args = parser.parse_args()
     print(args)
@@ -166,22 +177,29 @@ def main():
     device = torch.device("cuda:" + str(args.device)) if torch.cuda.is_available() else torch.device("cpu")
 
     #set up dataset
-    dataset = MoleculeDataset_aug_rgcl("dataset/" + args.dataset, dataset=args.dataset)
+    dataset = MoleculeDataset_aug("dataset/" + args.dataset, dataset=args.dataset)
     print(dataset)
 
     #set up model
 
-    torch.manual_seed(42)  # 为 gnn1 设置随机种子
     gnn1 = GNN(args.num_layer, args.emb_dim, JK=args.JK, drop_ratio=args.dropout_ratio, gnn_type=args.gnn_type,
               kan_mlp = args.kan_mlp, kan_mp = args.kan_mp, kan_type = args.kan_type1, grid = args.grid, k = args.k, 
               neuron_fun= args.neuron_fun, use_transformer = args.use_transformer)
     model1 = graphcl(gnn1, args)
 
-    torch.manual_seed(100)  # 为 gnn2 设置不同的随机种子
     gnn2 = GNN(args.num_layer, args.emb_dim, JK=args.JK, drop_ratio=args.dropout_ratio, gnn_type=args.gnn_type,
               kan_mlp = args.kan_mlp, kan_mp = args.kan_mp, kan_type = args.kan_type2, grid = args.grid, k = args.k, 
               neuron_fun= args.neuron_fun, use_transformer = args.use_transformer)
     model2 = graphcl(gnn2, args)
+
+    # 在初始化gnn1和gnn2之后，加载预训练模型
+    if args.input_model_file1 != "":
+        print("Loading pretrained model for gnn1 from", args.input_model_file1)
+        gnn1.load_state_dict(torch.load(args.input_model_file1, map_location=device))
+
+    if args.input_model_file2 != "":
+        print("Loading pretrained model for gnn2 from", args.input_model_file2)
+        gnn2.load_state_dict(torch.load(args.input_model_file2, map_location=device))
 
     model1.to(device)
     model2.to(device)

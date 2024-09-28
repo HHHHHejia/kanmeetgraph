@@ -11,5 +11,5 @@ do
         --num_layer 2 \
         --emb_dim 64 \
         --kan_mlp kan\
-        --input_model_file ./to_test/l2d64e20/rgcl_seed0_20_gnn1.pth
+        --input_model_file ./to_test/aug/l2d64kanbf/kan/rgcl_seed0_40_gnn1.pth
 done

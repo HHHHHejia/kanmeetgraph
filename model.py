@@ -445,7 +445,7 @@ class GNN(torch.nn.Module):
                     self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
                 elif use_transformer == "kan":
                     print("using kan transformer")
-                    self.gnns.append(KANTransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
+                    self.gnns.append(KANTransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward, grid = 5, k = 1))
             
             elif gnn_type == "gcn":
                 self.gnns.append(GCNConv(emb_dim, emb_dim, kan_mlp = kan_mlp))
