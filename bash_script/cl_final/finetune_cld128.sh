@@ -1,5 +1,6 @@
 seed=$1
 device=$2
+model=$3
 datasets=("bace" "bbbp" "clintox" "hiv" "sider" "tox21" "toxcast" "muv")
 # 遍历每个 dataset
 for dataset in "${datasets[@]}"
@@ -11,5 +12,5 @@ do
         --num_layer 2 \
         --emb_dim 128 \
         --kan_mlp kan\
-        --input_model_file ./to_test/l2d128e100/rgcl_seed0_100_gnn1.pth
+        --input_model_file $model
 done

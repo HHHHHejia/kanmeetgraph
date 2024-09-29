@@ -122,7 +122,7 @@ def main():
     args = parser.parse_args()
 
     # Initialize wandb
-    wandb.init(project="ICLR25_Trans", config=args)
+    wandb.init(project="ICLR25_scale", config=args)
     config = wandb.config
 
     torch.manual_seed(args.runseed)
@@ -189,7 +189,7 @@ def main():
         np.random.shuffle(indices)
         subset_indices = indices[:num_train]
         train_dataset = torch.utils.data.Subset(train_dataset, subset_indices)
-
+        print(f"using only {args.data_fraction} training set!!!")
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
     val_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
