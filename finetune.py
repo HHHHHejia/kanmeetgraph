@@ -115,6 +115,7 @@ def main():
     parser.add_argument('--kan_type', type = str, default='ori', help="ori, bsrbf")
     parser.add_argument('--grid', type = int, default = 5, help="bspline grid")
     parser.add_argument('--k', type = int, default = 3, help="bspline order")
+    parser.add_argument('--num_heads', type = int, default = 4, help="head num")
     parser.add_argument('--neuron_fun', type = str, default = 'sum', help="kan's neuron_fun, in mean or sum")
     parser.add_argument('--use_transformer', type = str, default = 'mlp' , help="Use transformer: none, mlp or kan")
     parser.add_argument('--data_fraction', type=float, default=1.0, help='fraction of training data to use')
@@ -200,7 +201,7 @@ def main():
                            JK=args.JK, drop_ratio=args.dropout_ratio, 
                            graph_pooling=args.graph_pooling, gnn_type=args.gnn_type,
                             kan_mlp = args.kan_mlp, kan_mp= args.kan_mp, kan_type = args.kan_type,
-                            grid = args.grid, k = args.k, neuron_fun= args.neuron_fun, use_transformer= args.use_transformer)
+                            grid = args.grid, k = args.k, num_heads = args.num_heads, neuron_fun= args.neuron_fun, use_transformer= args.use_transformer)
     if not args.input_model_file == "":
         print(args.input_model_file)
         model.from_pretrained(args.input_model_file, device)

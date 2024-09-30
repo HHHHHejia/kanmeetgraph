@@ -107,7 +107,7 @@ def main():
     parser.add_argument('--filename', type=str, default='', help='output filename')
     parser.add_argument('--seed', type=int, default=42, help = "Seed for splitting the dataset.")
     parser.add_argument('--runseed', type=int, default=0, help = "Seed for minibatch selection, random initialization.")
-    parser.add_argument('--split', type=str, default="scaffold", help = "random or scaffold or random_scaffold")
+    parser.add_argument('--split', type=str, default="random", help = "random or scaffold or random_scaffold")
     parser.add_argument('--eval_train', type=int, default=1, help='evaluating training or not')
     parser.add_argument('--num_workers', type=int, default=1, help='number of workers for dataset loading')
     parser.add_argument('--kan_mlp', type = str, default='mlp', help="mlp or kan")

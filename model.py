@@ -417,7 +417,7 @@ class GNN(torch.nn.Module):
     """
     def __init__(self, num_layer, emb_dim, JK = "last", drop_ratio=0, gnn_type = "gin",
                  kan_mlp = False, kan_mp = False, kan_type = None, grid = None, k = None, neuron_fun =None,
-                 use_transformer=False, num_heads=4):
+                 use_transformer=False, num_heads=None):
         super(GNN, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
@@ -445,7 +445,7 @@ class GNN(torch.nn.Module):
                     self.gnns.append(nn.TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward))
                 elif use_transformer == "kan":
                     print("using kan transformer")
-                    self.gnns.append(KANTransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward, grid = 5, k = 1))
+                    self.gnns.append(KANTransformerEncoderLayer(d_model=emb_dim, nhead=num_heads, dim_feedforward=dim_feedforward, grid = grid, k = k))
             
             elif gnn_type == "gcn":
                 self.gnns.append(GCNConv(emb_dim, emb_dim, kan_mlp = kan_mlp))
@@ -527,7 +527,7 @@ class GNN_graphpred(torch.nn.Module):
     JK-net: https://arxiv.org/abs/1806.03536
     """
     def __init__(self, num_layer, emb_dim, num_tasks, JK = "last", drop_ratio = 0, graph_pooling = "mean", gnn_type = "gin",
-                 kan_mlp = None, kan_mp = None, kan_type = None, grid = None, k = None, neuron_fun = None, use_transformer = False):
+                 kan_mlp = None, kan_mp = None, kan_type = None, grid = None, k = None, num_heads = None, neuron_fun = None, use_transformer = False):
         super(GNN_graphpred, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
@@ -539,7 +539,7 @@ class GNN_graphpred(torch.nn.Module):
             raise ValueError("Number of GNN layers must be greater than 1.")
 
         self.gnn = GNN(num_layer, emb_dim, JK, drop_ratio, gnn_type=gnn_type, 
-                       kan_mlp = kan_mlp, kan_mp = kan_mp, kan_type = kan_type, grid = grid, k = k, neuron_fun= neuron_fun,
+                       kan_mlp = kan_mlp, kan_mp = kan_mp, kan_type = kan_type, grid = grid, k = k, num_heads = num_heads, neuron_fun= neuron_fun,
                        use_transformer = use_transformer)
 
         #Different kind of graph pooling

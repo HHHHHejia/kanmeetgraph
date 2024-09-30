@@ -15,8 +15,9 @@ class KANTransformerEncoderLayer(Module):
     __constants__ = ['batch_first', 'norm_first']
 
     def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
+                 activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
                  layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
-                 device=None, dtype=None, grid=None, k=None, neuron_fun='sum') -> None:
+                 device=None, dtype=None, grid=5, k=1, neuron_fun='sum') -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}
         super().__init__()
         self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first,
@@ -32,9 +33,22 @@ class KANTransformerEncoderLayer(Module):
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
 
+        # Legacy string support for activation function.
+        if isinstance(activation, str):
+            activation = F._get_activation_fn(activation)
+
+        if activation is F.relu or isinstance(activation, torch.nn.ReLU):
+            self.activation_relu_or_gelu = 1
+        elif activation is F.gelu or isinstance(activation, torch.nn.GELU):
+            self.activation_relu_or_gelu = 2
+        else:
+            self.activation_relu_or_gelu = 0
+        self.activation = activation
+
     def __setstate__(self, state):
         super().__setstate__(state)
-        pass
+        if not hasattr(self, 'activation'):
+            self.activation = F.relu
 
     def forward(
             self,
@@ -83,7 +97,7 @@ class KANTransformerEncoderLayer(Module):
     def _ff_block(self, x: Tensor) -> Tensor:
         bsz, sq_len, hiddim = x.size()
         x = x.view(-1, hiddim)
-        x = self.linear2(self.dropout(self.linear1(x)))
+        x = self.linear2(self.dropout(self.activation(self.linear1(x))))
         x = x.view(bsz, sq_len, hiddim)
         return self.dropout2(x)
 
@@ -109,15 +123,12 @@ class MultiheadAttention(Module):
         assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
 
         # Using KANLayer_cus for projections
-        self.q_proj = KANLayer_cus(in_dim=embed_dim, out_dim=embed_dim, num=grid, k=k, neuron_fun= neuron_fun)
-        self.k_proj = KANLayer_cus(in_dim=self.kdim, out_dim=embed_dim, num=grid, k=k, neuron_fun= neuron_fun)
-        self.v_proj = KANLayer_cus(in_dim=self.vdim, out_dim=embed_dim, num=grid, k=k, neuron_fun= neuron_fun)
+        self.q_proj = KANLayer_cus(in_dim=embed_dim, out_dim=embed_dim, num=grid, k=k)
+        self.k_proj = KANLayer_cus(in_dim=self.kdim, out_dim=embed_dim, num=grid, k=k)
+        self.v_proj = KANLayer_cus(in_dim=self.vdim, out_dim=embed_dim, num=grid, k=k)
 
         # Using KANLayer_cus for output projection
-        if num_heads == 1:
-            self.out_proj = torch.nn.Identity()
-        else:
-            self.out_proj = KANLayer_cus(in_dim=embed_dim, out_dim=embed_dim, num=grid, k=k)
+        self.out_proj = KANLayer_cus(in_dim=embed_dim, out_dim=embed_dim, num=grid, k=k)
 
         if add_bias_kv:
             self.bias_k = Parameter(torch.empty((1, 1, embed_dim), **factory_kwargs))
