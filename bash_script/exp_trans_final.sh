@@ -18,7 +18,7 @@ do
             --num_layer $num_layer \
             --emb_dim $emb_dim \
             --gnn_type $type \
-            --kan_mlp kan\
+            --kan_mlp mlp\
             --use_transformer kan\
             --grid 5\
             --k 3 > "./log/final_log1.log" 2>&1 &

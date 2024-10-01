@@ -123,7 +123,7 @@ def main():
     args = parser.parse_args()
 
     # Initialize wandb
-    wandb.init(project="ICLR25_Trans", config=args)
+    wandb.init(project="ICLR25_Trans_final", config=args)
     config = wandb.config
 
     torch.manual_seed(args.runseed)
